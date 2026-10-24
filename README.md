@@ -33,7 +33,7 @@ This project is being built progressively using a feature-driven approach:
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/yourusername/Aminos-SI-Assistant.git
+   git clone https://github.com/itsAminos/Aminos-SI-Assistant.git
    cd Aminos-SI-Assistant
    ```
 
