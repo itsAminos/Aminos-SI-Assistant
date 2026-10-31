@@ -12,5 +12,6 @@ def main():
     print(startup_log)
     print("Status: Waiting for Telegram Webhook initialization...")
 
-    if __name__ == "__main__":
-        main()
+if __name__ == "__main__":
+    main()
+
