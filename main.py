@@ -1,34 +1,58 @@
 import sys
-import asyncio
 import logging
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Request
+from aiogram import types
 from app.core.config import config
 from app.bot.loader import bot, dp
 from app.bot.handlers import router
 
+logging.basicConfig(level=logging.INFO)
+dp.include_router(router)
 
-async def main():
+# Use token in path to secure the endpoint against unauthorized POSTs
+WEBHOOK_PATH = f"/webhook/{config.bot_token}"
+# Replace with your actual domain or ngrok URL for local testing
+WEBHOOK_URL = f"https://your-domain.ngrok-free.app{WEBHOOK_PATH}"
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # --- Startup Logic ---
     bot_name = "Aminos-SI-Assistant"
     version = "0.1.0"
     python_version = sys.version.split()[0]
-
-    logging.basicConfig(level=logging.INFO)
-    dp.include_router(router)
-
-    # Masking the token so we don't leak it in logs (e.g., 12345:***)
     masked_token = f"{config.bot_token.split(':')[0]}:***"
-    startup_log = f"🚀 Starting {bot_name} v{version} | Python {python_version}"
 
-    # Print logs before starting the blocking polling loop
-    print(startup_log)
+    print(f"🚀 Starting {bot_name} v{version} | Python {python_version}")
     print(f"Loaded Bot Token: {masked_token}")
-    print("Status: Initializing Telegram polling...")
+    print(f"Status: Initializing Telegram webhook at {WEBHOOK_URL}...")
 
-    # Drops pending updates from while the bot was offline, then starts polling
-    await bot.delete_webhook(drop_pending_updates=True)
+    await bot.set_webhook(
+        url=WEBHOOK_URL,
+        allowed_updates=dp.resolve_used_update_types(),
+        drop_pending_updates=True
+    )
+    yield
 
-    # The event loop takes over here indefinitely
-    await dp.start_polling(bot)
+    # --- Shutdown Logic ---
+    print("Status: Shutting down and cleaning up webhooks...")
+    await bot.delete_webhook()
+    await bot.session.close()
 
 
-if __name__ == "__main__":
-    asyncio.run(main())
+app = FastAPI(lifespan=lifespan)
+
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "bot": "Aminos-SI-Assistant"}
+
+
+@app.post(WEBHOOK_PATH)
+async def telegram_webhook(request: Request):
+    """Event-driven endpoint receiving updates directly from Telegram."""
+    update_data = await request.json()
+    update = types.Update(**update_data)
+    await dp.feed_update(bot=bot, update=update)
+    return {"ok": True}
